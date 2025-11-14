@@ -7,8 +7,9 @@ const uint8_t MPR121_I2C_ADDR = 0x5A;
 MPR121 mpr121 = MPR121();
 
 void setup() {
-  ire.begin();
-    Serial.begin(9600);
+  Wire.begin();
+  delay(100);
+  Serial.begin(9600);
   while (!Serial);
   delay(3000);
 
@@ -56,5 +57,5 @@ void loop() {
   }
 
   Serial.println();
-  delay(500);
+  delay(50);
 }
