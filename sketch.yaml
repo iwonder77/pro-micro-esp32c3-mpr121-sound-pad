@@ -1,0 +1,2 @@
+default_fqbn: esp32:esp32:sparkfun_pro_micro_esp32c3
+default_port: /dev/cu.usbmodem11401
