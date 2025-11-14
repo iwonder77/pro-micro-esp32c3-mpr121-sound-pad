@@ -58,18 +58,18 @@ bool MPR121::begin(uint8_t i2c_addr, TwoWire *the_wire) {
   // setting new values for MHDF, NHDF, NCLF, and FDLF
 
   // ========== FALLING (filtered < baseline) ==========
-  //  * MHDF = 1, small changes (±2 counts) are tracked immediately
+  //  * MHDF = 4, small changes (±8 counts) are tracked immediately
   //    this is okay because tiny environmental changes should be followed
-  writeRegister(MPR121_MHDF, 0x01);
+  writeRegister(MPR121_MHDF, 0x04);
   //  * NHDF = 1, when baseline does adjust, move by small increment (1 count)
   writeRegister(MPR121_NHDF, 0x01);
-  //  * NCLF = 100, need 100 consecutive samples beyond small ±2 counts (MHDF)
-  //    before adjusting baseline, at 100 samples/sec, every 1 second of
+  //  * NCLF = 255, need 255 consecutive samples beyond small ±2 counts (MHDF)
+  //    before adjusting baseline, at 100 samples/sec, every 2.55 seconds of
   //    sustained change will accumulate and change baseline (real drift), but
   //    brief touches won't
-  writeRegister(MPR121_NCLF, 0x64);
-  //  * FDLF = 2, add slight filter delay to slow the system even more
-  writeRegister(MPR121_FDLF, 0x02);
+  writeRegister(MPR121_NCLF, 0xFF);
+  //  * FDLF = 6, add slight filter delay to slow the system even more
+  writeRegister(MPR121_FDLF, 0x06);
 
   // ========== RISING (filtered > baseline) ==========
   writeRegister(MPR121_MHDR, 0x01);
@@ -87,31 +87,35 @@ bool MPR121::begin(uint8_t i2c_addr, TwoWire *the_wire) {
   writeRegister(MPR121_DEBOUNCE, 0);
 
   // ---------- CONFIG1 & CONFIG 2 ----------
+  // (see pg 14 of datasheet for description and encoding values)
   // Filter/Global CDC Configuration Register: 0x5C (CONFIG1)
-  // set to 0x10 = 0b00010000
+  // set to 0x10 = 0b00110000
   //  * FFI (First Filter Iterations) - bits [7:6]
-  //    ** FFI = 00, sets samples taken to 6 (default)
+  uint8_t ffi = 0b00; // sets samples taken to 6 (default)
   //  * CDC (global Charge/Discharge Current) - bits [5:0]
-  //    ** CDC = 010000, sets current to 16μA (default)
+  uint8_t cdc_global = 0b011001; // sets current to 27μA
+  uint8_t cfg1_reg = (ffi << 6) | (cdc_global & 0x3F);
+  writeRegister(MPR121_CONFIG1, cfg1_reg);
   // Filter/Global CDT Configuration Register: 0x5D (CONFIG2)
   // set to 0x41 = 0b01000001
   //  * CDT (global Charge/Discharge Time) - bits [7:5]
-  //    ** CDT = 010, sets charge time to 1μS
+  uint8_t cdt_global = 0b010; // sets charge time to 1μS
   //  * SFI (Second Filter Iterations) - bits [4:3]
-  //    ** CDT = 00, number of samples for 2nd level filter set to 4 (default)
+  uint8_t sfi = 0b00; // number of samples for 2nd level filter set to 4
   //  * ESI (Electrode Sample Interval) - bits [2:0]
-  //    ** ESI = 001, electrode sampling period set to 2 ms
-  // (see pg 14 of datasheet for description and encoding values)
-  writeRegister(MPR121_CONFIG1, 0x10);
-  writeRegister(MPR121_CONFIG2, 0x40);
+  uint8_t esi = 0b001; // electrode sampling period set to 2 ms
+  uint8_t cfg2_reg = (cdt_global << 5) | (sfi << 3) | esi;
+  writeRegister(MPR121_CONFIG2, cfg2_reg);
 
   // ---------- AUTOCONFIG ----------
+  // important: disable autoconfig so it doesn't overwrite our CDC/CDT values
   // Auto-Configuration Control Register 0: 0x7B (AUTOCONFIG0)
   //  * FFI (First Filter Iterations) - bits [7:6] (same as 0x5C)
   //  * RETRY - bits [5:4]
   //  * BVA - bits [3:2], fill with same bits as CL bits in ECR (0x5E) register
   //  * ARE (Auto-Reconfiguration Enable) - bit 1
   //  * ACE (Auto-Configuration Enable) - bit 0
+  writeRegister(MPR121_AUTOCONFIG0, 0b00001000);
   // Auto-Configuration Control Register 1: 0x7C (AUTOCONFIG1)
   //  * SCTS (Skip Charge Time Search) - bit 7
   //  * bits [6:3] unused
@@ -119,8 +123,6 @@ bool MPR121::begin(uint8_t i2c_addr, TwoWire *the_wire) {
   //  * ARFIE (Auto-reconfiguration fail interrupt enable) - bit 1
   //  * ACFIE (Auto-configuration fail interrupt enable) - bit 0
   // (see pg 17 of datasheet for description and encoding values)
-  // important: disable autoconfig so it doesn't overwrite our CDC/CDT values
-  writeRegister(MPR121_AUTOCONFIG0, 0b00001000);
 
   // ---------- RUN Mode ----------
   // Set ECR to enable all 12 electrodes
